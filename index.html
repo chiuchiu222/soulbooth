@@ -121,24 +121,25 @@ function processAutoDriveAndPrint() {
     // Gửi chuỗi số điện thoại đã được làm sạch lên Backend
     const payload = { stt: stt, name: name, phone: cleanPhone, room: room };
 
-    fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    })
-    .then(() => {
-        // Đồng bộ thuật toán tạo link quét QR cục bộ
-        var lastFour = cleanPhone.length >= 4 ? cleanPhone.slice(-4) : "0000";
-        var expectedFolderName = stt + " - " + name + " - " + room + " - " + lastFour;
-        const searchLink = "https://drive.google.com/drive/search?q=" + encodeURIComponent(expectedFolderName);
-        
-        executePrintLayout(stt, name, phone, room, goi, total, searchLink);
-    })
-    .catch(error => {
-        alert("Lỗi hệ thống: " + error);
+fetch(GOOGLE_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" }, // Ép kiểu text/plain để bổ trợ bypass trên serverless
+    body: JSON.stringify(payload)
+})
+.then(response => response.json()) // Bắt buộc phải có dòng này để chuyển đổi dữ liệu nhận về
+.then(result => {
+    if (result.status === "success" && result.url) {
+        // Kích hoạt in với link thực thể drive.google.com/drive/folders/KÝ_TỰ_ID
+        executePrintLayout(stt, name, phone, room, goi, total, result.url);
+    } else {
+        alert("Lỗi tạo folder từ Google: " + result.message);
         resetFormState();
-    });
+    }
+})
+.catch(error => {
+    alert("Hệ thống bị chặn bảo mật (CORS). Vui lòng chuyển sang chạy bằng GitHub Pages hoặc Local Server!");
+    resetFormState();
+});
 }
 
 function executePrintLayout(stt, name, phone, room, goi, total, driveLink) {
