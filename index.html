@@ -19,6 +19,19 @@
 
         #invoice-zone { display: none; }
 
+        /* --- BẢNG LƯU TRỮ KHÁCH HÀNG (CHỈ HIỂN THỊ TRÊN MÀN HÌNH) --- */
+        .customer-log-section { margin-top: 20px; max-width: 100%; overflow-x: auto; }
+        .customer-log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+        .customer-log-header h3 { margin: 0; color: #0275d8; font-size: 16px; }
+        #btn-clear-list { width: auto; padding: 8px 16px; background-color: #dc3545; font-size: 14px; }
+        #btn-clear-list:hover { background-color: #c82333; }
+        #customer-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        #customer-table th, #customer-table td { border: 1px solid #dee2e6; padding: 8px 6px; text-align: left; vertical-align: top; }
+        #customer-table th { background-color: #e9ecef; font-weight: bold; white-space: nowrap; }
+        #customer-table tbody tr:nth-child(even) { background-color: #f8f9fa; }
+        #customer-table .drive-link { color: #0275d8; word-break: break-all; font-size: 12px; }
+        #customer-table .empty-row td { text-align: center; color: #6c757d; font-style: italic; }
+
         /* --- CẤU HÌNH IN ĐẶC THÙ CHO XPRINTER K80 --- */
         @media print {
             html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 72mm !important; }
@@ -30,6 +43,7 @@
             .qr-container img { width: 160px !important; height: 160px !important; display: block !important; margin: 0 auto !important; image-rendering: pixelated; }
             .qr-container canvas { display: none !important; }
             .invoice-footer { font-size: 9pt; text-align: center; font-style: italic; margin-top: 10px; }
+            #input-form, .customer-log-section, #customer-table, #btn-clear-list { display: none !important; }
         }
     </style>
 </head>
@@ -72,8 +86,32 @@
     <div id="loading-text" class="loading">Đang tạo thư mục bảo mật trên Drive... Vui lòng đợi...</div>
 </div>
 
+<div class="container customer-log-section" id="customer-table-section">
+    <div class="customer-log-header">
+        <h3>Danh sách khách hàng đã in hôm nay</h3>
+        <button type="button" id="btn-clear-list" onclick="clearDailyCustomerList()">Xóa danh sách</button>
+    </div>
+    <table id="customer-table">
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Tên</th>
+                <th>SĐT</th>
+                <th>Room</th>
+                <th>Gói</th>
+                <th>Tổng Tiền</th>
+                <th>Thời gian in</th>
+                <th>Link Drive</th>
+            </tr>
+        </thead>
+        <tbody id="customer-table-body">
+            <tr class="empty-row"><td colspan="8">Chưa có khách hàng nào được in hôm nay.</td></tr>
+        </tbody>
+    </table>
+</div>
+
 <div id="invoice-zone">
-    <div class="invoice-title">SOULBOOTH WHIMSY GARDEN</div>
+    <div class="invoice-title">SOULBOOTH<br>WHIMSY GARDEN</div>
     <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
     
     <div class="invoice-details">
@@ -87,7 +125,7 @@
     </div>
     
     <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
-    <div style="text-align: center; font-size: 9 pt; font-weight: bold; margin-top: 5px;">MÃ QR TRUY CẶP THƯ MỤC</div>
+    <div style="text-align: center; font-size: 9 pt; font-weight: bold; margin-top: 5px;">MÃ QR TRUY CẬP THƯ MỤC</div>
     
     <div class="qr-container" id="qrcode"></div>
     
@@ -98,73 +136,188 @@
 <script>
 // THAY ĐƯỜNG DẪN WEB APP CỦA GOOGLE APPS SCRIPT VÀO ĐÂY
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjqE0Y4l4Cii7gPG6fHRchdocU6bf4AuA2p3zlg8J2_N3KvaMeq_0N0LHqgvbf4POrPQ/exec";
+const STORAGE_KEY = "soulbooth_daily_prints";
 
-function processAutoDriveAndPrint() {
-    const stt = document.getElementById('customerSTT').value || '--';
-    const name = document.getElementById('customerName').value;
-    const phone = document.getElementById('customerPhone').value || '';
-    const room = document.getElementById('numberRoom').value || '--';
-    const goi = document.getElementById('serviceGoi').value || '--';
-    const total = document.getElementById('totalMoney').value || '--';
+function cleanPhoneNumber(phone) {
+    return (phone || "").replace(/\D/g, "").trim();
+}
 
-    if (!name) {
-        alert('Bắt buộc phải nhập Tên khách hàng!');
+function getLastFourDigits(cleanPhone) {
+    return cleanPhone.length >= 4 ? cleanPhone.slice(-4) : "0000";
+}
+
+function parseMoneyValue(str) {
+    if (!str || str === "--") return "";
+    return String(str).replace(/\D/g, "");
+}
+
+function formatMoneyDisplay(raw) {
+    const digits = parseMoneyValue(raw);
+    if (!digits) return "";
+    return Number(digits).toLocaleString("vi-VN") + "đ";
+}
+
+function formatTotalMoneyOnBlur() {
+    const input = document.getElementById("totalMoney");
+    const formatted = formatMoneyDisplay(input.value);
+    if (formatted) input.value = formatted;
+}
+
+function getTodayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function loadDailyEntries() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        if (stored.date !== getTodayKey()) return [];
+        return stored.entries || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveDailyEntry(entry) {
+    const today = getTodayKey();
+    let stored;
+    try {
+        stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch (e) {
+        stored = {};
+    }
+    if (stored.date !== today) {
+        stored = { date: today, entries: [] };
+    }
+    stored.entries.push(entry);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    renderCustomerTable();
+}
+
+function clearDailyCustomerList() {
+    if (!confirm("Bạn có chắc muốn xóa toàn bộ danh sách khách hàng đã in hôm nay?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    renderCustomerTable();
+}
+
+function renderCustomerTable() {
+    const tbody = document.getElementById("customer-table-body");
+    const entries = loadDailyEntries();
+
+    if (entries.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Chưa có khách hàng nào được in hôm nay.</td></tr>';
         return;
     }
 
-    // SỬA LỖI ĐẦU VÀO: Loại bỏ toàn bộ ký tự rác, khoảng trắng, chỉ giữ lại số thuần túy
-    const cleanPhone = phone.replace(/\D/g, '').trim();
-
-    document.getElementById('btn-submit').disabled = true;
-    document.getElementById('loading-text').style.display = 'block';
-
-    // Gửi chuỗi số điện thoại đã được làm sạch lên Backend
-    const payload = { stt: stt, name: name, phone: cleanPhone, room: room };
-
-fetch(GOOGLE_SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" }, // Ép kiểu text/plain để bổ trợ bypass trên serverless
-    body: JSON.stringify(payload)
-})
-.then(response => response.json()) // Bắt buộc phải có dòng này để chuyển đổi dữ liệu nhận về
-.then(result => {
-    if (result.status === "success" && result.url) {
-        // Kích hoạt in với link thực thể drive.google.com/drive/folders/KÝ_TỰ_ID
-        executePrintLayout(stt, name, phone, room, goi, total, result.url);
-    } else {
-        alert("Lỗi tạo folder từ Google: " + result.message);
-        resetFormState();
-    }
-})
-.catch(error => {
-    alert("Hệ thống bị chặn bảo mật (CORS). Vui lòng chuyển sang chạy bằng GitHub Pages hoặc Local Server!");
-    resetFormState();
-});
+    tbody.innerHTML = entries.map(function(entry) {
+        const driveCell = entry.driveLink
+            ? '<a class="drive-link" href="' + escapeHtml(entry.driveLink) + '" target="_blank" rel="noopener">Mở Drive</a>'
+            : "--";
+        return "<tr>" +
+            "<td>" + escapeHtml(entry.stt || "--") + "</td>" +
+            "<td>" + escapeHtml(entry.name || "--") + "</td>" +
+            "<td>" + escapeHtml(entry.phone || "--") + "</td>" +
+            "<td>" + escapeHtml(entry.room || "--") + "</td>" +
+            "<td>" + escapeHtml(entry.goi || "--") + "</td>" +
+            "<td>" + escapeHtml(entry.total || "--") + "</td>" +
+            "<td>" + escapeHtml(entry.printedAt || "--") + "</td>" +
+            "<td>" + driveCell + "</td>" +
+            "</tr>";
+    }).join("");
 }
 
-function executePrintLayout(stt, name, phone, room, goi, total, driveLink) {
-    document.getElementById('printSTT').innerText = stt;
-    document.getElementById('printName').innerText = name;
-    document.getElementById('printPhone').innerText = phone || '--';
-    document.getElementById('printRoom').innerText = room;
-    document.getElementById('printGoi').innerText = goi;
-    document.getElementById('printTotal').innerText = total; // Điền tổng tiền vào phiếu in
-    document.getElementById('printDate').innerText = new Date().toLocaleString('vi-VN');
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
 
-    const qrContainer = document.getElementById('qrcode');
-    qrContainer.innerHTML = ""; 
+function processAutoDriveAndPrint() {
+    const stt = document.getElementById("customerSTT").value || "--";
+    const name = document.getElementById("customerName").value;
+    const phoneRaw = document.getElementById("customerPhone").value || "";
+    const room = document.getElementById("numberRoom").value || "--";
+    const goi = document.getElementById("serviceGoi").value || "--";
+    const totalRaw = document.getElementById("totalMoney").value || "--";
+    const totalFormatted = formatMoneyDisplay(totalRaw) || totalRaw;
+
+    if (!name) {
+        alert("Bắt buộc phải nhập Tên khách hàng!");
+        return;
+    }
+
+    const cleanPhone = cleanPhoneNumber(phoneRaw);
+    const lastFourDigits = getLastFourDigits(cleanPhone);
+
+    document.getElementById("btn-submit").disabled = true;
+    document.getElementById("loading-text").style.display = "block";
+
+    const payload = {
+        stt: stt,
+        name: name,
+        phone: cleanPhone,
+        room: room,
+        goi: goi,
+        total: totalFormatted,
+        lastFourDigits: lastFourDigits
+    };
+
+    fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.status === "success" && result.url) {
+            const printedAt = new Date().toLocaleString("vi-VN");
+            saveDailyEntry({
+                stt: stt,
+                name: name,
+                phone: cleanPhone,
+                room: room,
+                goi: goi,
+                total: totalFormatted,
+                printedAt: printedAt,
+                driveLink: result.url
+            });
+            executePrintLayout(stt, name, cleanPhone, room, goi, totalFormatted, result.url, printedAt);
+        } else {
+            alert("Lỗi tạo folder từ Google: " + (result.message || "Không nhận được link Drive."));
+            resetFormState();
+        }
+    })
+    .catch(function() {
+        alert("Hệ thống bị chặn bảo mật (CORS). Vui lòng chuyển sang chạy bằng GitHub Pages hoặc Local Server!");
+        resetFormState();
+    });
+}
+
+function executePrintLayout(stt, name, cleanPhone, room, goi, total, driveLink, printedAt) {
+    document.getElementById("printSTT").innerText = stt;
+    document.getElementById("printName").innerText = name;
+    document.getElementById("printPhone").innerText = cleanPhone || "--";
+    document.getElementById("printRoom").innerText = room;
+    document.getElementById("printGoi").innerText = goi;
+    document.getElementById("printTotal").innerText = total;
+    document.getElementById("printDate").innerText = printedAt || new Date().toLocaleString("vi-VN");
+
+    const qrContainer = document.getElementById("qrcode");
+    qrContainer.innerHTML = "";
     new QRCode(qrContainer, {
         text: driveLink,
-        width: 160,  
+        width: 160,
         height: 160,
-        colorDark : "#000000",
-        colorLight : "#ffffff",
-        correctLevel : QRCode.CorrectLevel.M
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
     });
 
-    document.getElementById('input-form').style.display = 'none';
-    document.getElementById('invoice-zone').style.display = 'block';
-    
+    document.getElementById("input-form").style.display = "none";
+    document.getElementById("customer-table-section").style.display = "none";
+    document.getElementById("invoice-zone").style.display = "block";
+
     setTimeout(function() {
         window.print();
         resetFormState();
@@ -172,11 +325,15 @@ function executePrintLayout(stt, name, phone, room, goi, total, driveLink) {
 }
 
 function resetFormState() {
-    document.getElementById('btn-submit').disabled = false;
-    document.getElementById('loading-text').style.display = 'none';
-    document.getElementById('input-form').style.display = 'block';
-    document.getElementById('invoice-zone').style.display = 'none';
+    document.getElementById("btn-submit").disabled = false;
+    document.getElementById("loading-text").style.display = "none";
+    document.getElementById("input-form").style.display = "block";
+    document.getElementById("customer-table-section").style.display = "block";
+    document.getElementById("invoice-zone").style.display = "none";
 }
+
+document.getElementById("totalMoney").addEventListener("blur", formatTotalMoneyOnBlur);
+document.addEventListener("DOMContentLoaded", renderCustomerTable);
 </script>
 
 </body>
