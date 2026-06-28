@@ -19,11 +19,19 @@
 
         #invoice-zone { display: none; }
 
-        .frame-lines { margin-top: 4px; }
+        .frame-section { margin-top: 4px; width: 100%; }
+        .frame-area { position: relative; width: 100%; }
+        .frame-vline-wrap { position: absolute; top: 0; bottom: 0; left: calc(1.4em + 10px); right: 0; z-index: 0; pointer-events: none; }
+        .frame-vline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid #000; }
+        .frame-vline-1 { left: 33.33%; }
+        .frame-vline-2 { left: 66.66%; }
+        .frame-heading { display: block; position: relative; z-index: 1; margin-bottom: 8px; font-weight: bold; }
+        .frame-lines { position: relative; z-index: 1; }
         .frame-row { display: flex; align-items: center; font-weight: bold; margin-bottom: 10px; line-height: 1.4; }
+        .frame-row:last-child { margin-bottom: 0; }
         .frame-row > strong { min-width: 1.4em; flex-shrink: 0; }
-        .frame-slots { flex: 1; display: flex; justify-content: space-between; padding-left: 10px; }
-        .frame-slots span { font-weight: bold; }
+        .frame-track { flex: 1; display: flex; justify-content: space-between; align-items: center; padding-left: 10px; min-height: 1.2em; }
+        .frame-track span { font-weight: bold; }
 
         /* --- BẢNG LƯU TRỮ KHÁCH HÀNG (CHỈ HIỂN THỊ TRÊN MÀN HÌNH) --- */
         .customer-log-section { margin-top: 20px; max-width: 100%; overflow-x: auto; }
@@ -57,7 +65,9 @@
             #invoice-zone .invoice-details,
             #invoice-zone .invoice-footer { padding-left: 0 !important; padding-right: 0 !important; }
             #invoice-zone hr { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
-            .frame-slots { padding-left: 14px; padding-right: 0; justify-content: space-between; }
+            .frame-track { padding-left: 14px; padding-right: 0; }
+            .frame-vline-wrap { left: calc(1.4em + 14px) !important; }
+            .frame-vline { border-left-width: 1.5px !important; }
         }
     </style>
 </head>
@@ -137,12 +147,20 @@
         <strong>Gói:</strong> <span id="printGoi"></span><br>
         <strong>Tổng tiền:</strong> <span id="printTotal" style="font-weight: bold;"></span><br>
         <strong>Ngày in:</strong> <span id="printDate"></span><br><br>
-        <strong>Frame:</strong><br>
-        <div class="frame-lines">
-            <div class="frame-row"><strong>1:</strong><span class="frame-slots"><span>|</span><span>|</span></span></div>
-            <div class="frame-row"><strong>2:</strong><span class="frame-slots"><span>|</span><span>|</span></span></div>
-            <div class="frame-row"><strong>3:</strong><span class="frame-slots"><span>|</span><span>|</span></span></div>
-            <div class="frame-row"><strong>4:</strong><span class="frame-slots"><span>|</span><span>|</span></span></div>
+        <div class="frame-section">
+            <div class="frame-area">
+                <div class="frame-vline-wrap">
+                    <div class="frame-vline frame-vline-1"></div>
+                    <div class="frame-vline frame-vline-2"></div>
+                </div>
+                <strong class="frame-heading">Frame:</strong>
+                <div class="frame-lines">
+                    <div class="frame-row"><strong>1:</strong><div class="frame-track"><span>|</span><span>|</span></div></div>
+                    <div class="frame-row"><strong>2:</strong><div class="frame-track"><span>|</span><span>|</span></div></div>
+                    <div class="frame-row"><strong>3:</strong><div class="frame-track"><span>|</span><span>|</span></div></div>
+                    <div class="frame-row"><strong>4:</strong><div class="frame-track"><span>|</span><span>|</span></div></div>
+                </div>
+            </div>
         </div><br>
     </div>
     
