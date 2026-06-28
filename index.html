@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Hệ thống tự động in hóa đơn Drive - Local</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <style>
+        /* --- GIAO DIỆN HIỂN THỊ TRÊN MÀN HÌNH (WEB INTERFACE) --- */
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f6f9; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #0275d8; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #218838; }
+        .loading { display: none; text-align: center; font-weight: bold; color: #ffc107; margin-top: 10px; font-size: 14px; }
+
+        #invoice-zone { display: none; }
+
+        /* --- CẤU HÌNH IN ĐẶC THÙ CHO XPRINTER K80 --- */
+        @media print {
+            html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 72mm !important; }
+            .container { display: none !important; }
+            #invoice-zone { display: block !important; width: 72mm !important; margin: 0 !important; padding: 0 !important; border: none !important; }
+            .invoice-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 10px; }
+            .invoice-details { font-size: 10pt; line-height: 1.5; margin-bottom: 15px; }
+            .qr-container { display: block !important; width: 160px !important; height: 160px !important; margin: 15px auto !important; padding: 0 !important; }
+            .qr-container img { width: 160px !important; height: 160px !important; display: block !important; margin: 0 auto !important; image-rendering: pixelated; }
+            .qr-container canvas { display: none !important; }
+            .invoice-footer { font-size: 9pt; text-align: center; font-style: italic; margin-top: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="input-form">
+    <h2>HỆ THỐNG TỰ ĐỘNG TẠO FOLDER & IN</h2>
+    
+    <div class="form-group">
+        <label for="customerSTT">Số thứ tự (STT):</label>
+        <input type="text" id="customerSTT" placeholder="Ví dụ: 01">
+    </div>
+
+    <div class="form-group">
+        <label for="customerName">Tên khách hàng:</label>
+        <input type="text" id="customerName" placeholder="Ví dụ: Nguyễn Văn A">
+    </div>
+    
+    <div class="form-group">
+        <label for="customerPhone">Số điện thoại:</label>
+        <input type="text" id="customerPhone" placeholder="Ví dụ: 0901234567">
+    </div>
+
+    <div class="form-group">
+        <label for="numberRoom">Room (Phòng):</label>
+        <input type="text" id="numberRoom" placeholder="Ví dụ: 102">
+    </div>
+
+    <div class="form-group">
+        <label for="serviceGoi">Gói dịch vụ:</label>
+        <input type="text" id="serviceGoi" placeholder="Ví dụ: Combo 1">
+    </div>
+
+    <div class="form-group">
+        <label for="totalMoney">Tổng tiền:</label>
+        <input type="text" id="totalMoney" placeholder="Ví dụ: 500.000đ">
+    </div>
+    
+    <button id="btn-submit" onclick="processAutoDriveAndPrint()">LƯU THÔNG TIN & IN HÓA ĐƠN</button>
+    <div id="loading-text" class="loading">Đang tạo thư mục bảo mật trên Drive... Vui lòng đợi...</div>
+</div>
+
+<div id="invoice-zone">
+    <div class="invoice-title">SOULBOOTH WHIMSY GARDEN</div>
+    <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
+    
+    <div class="invoice-details">
+        <strong>STT:</strong> <span id="printSTT"></span><br>
+        <strong>Khách hàng:</strong> <span id="printName"></span><br>
+        <strong>Điện thoại:</strong> <span id="printPhone"></span><br>
+        <strong>Room:</strong> <span id="printRoom"></span><br>
+        <strong>Gói:</strong> <span id="printGoi"></span><br>
+        <strong>Tổng tiền:</strong> <span id="printTotal" style="font-weight: bold;"></span><br>
+        <strong>Ngày in:</strong> <span id="printDate"></span>
+    </div>
+    
+    <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
+    <div style="text-align: center; font-size: 9 pt; font-weight: bold; margin-top: 5px;">MÃ QR TRUY CẶP THƯ MỤC</div>
+    
+    <div class="qr-container" id="qrcode"></div>
+    
+    <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
+    <div class="invoice-footer">Cảm ơn quý khách!<br>Vui lòng quét mã QR để xem ảnh.<br>Mã QR có hiệu lực trong 4h.</div>
+</div>
+
+<script>
+// THAY ĐƯỜNG DẪN WEB APP CỦA GOOGLE APPS SCRIPT VÀO ĐÂY
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjqE0Y4l4Cii7gPG6fHRchdocU6bf4AuA2p3zlg8J2_N3KvaMeq_0N0LHqgvbf4POrPQ/exec";
+
+function processAutoDriveAndPrint() {
+    const stt = document.getElementById('customerSTT').value || '--';
+    const name = document.getElementById('customerName').value;
+    const phone = document.getElementById('customerPhone').value || '';
+    const room = document.getElementById('numberRoom').value || '--';
+    const goi = document.getElementById('serviceGoi').value || '--';
+    const total = document.getElementById('totalMoney').value || '--';
+
+    if (!name) {
+        alert('Bắt buộc phải nhập Tên khách hàng!');
+        return;
+    }
+
+    // SỬA LỖI ĐẦU VÀO: Loại bỏ toàn bộ ký tự rác, khoảng trắng, chỉ giữ lại số thuần túy
+    const cleanPhone = phone.replace(/\D/g, '').trim();
+
+    document.getElementById('btn-submit').disabled = true;
+    document.getElementById('loading-text').style.display = 'block';
+
+    // Gửi chuỗi số điện thoại đã được làm sạch lên Backend
+    const payload = { stt: stt, name: name, phone: cleanPhone, room: room };
+
+    fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    })
+    .then(() => {
+        // Đồng bộ thuật toán tạo link quét QR cục bộ
+        var lastFour = cleanPhone.length >= 4 ? cleanPhone.slice(-4) : "0000";
+        var expectedFolderName = stt + " - " + name + " - " + room + " - " + lastFour;
+        const searchLink = "https://drive.google.com/drive/search?q=" + encodeURIComponent(expectedFolderName);
+        
+        executePrintLayout(stt, name, phone, room, goi, total, searchLink);
+    })
+    .catch(error => {
+        alert("Lỗi hệ thống: " + error);
+        resetFormState();
+    });
+}
+
+function executePrintLayout(stt, name, phone, room, goi, total, driveLink) {
+    document.getElementById('printSTT').innerText = stt;
+    document.getElementById('printName').innerText = name;
+    document.getElementById('printPhone').innerText = phone || '--';
+    document.getElementById('printRoom').innerText = room;
+    document.getElementById('printGoi').innerText = goi;
+    document.getElementById('printTotal').innerText = total; // Điền tổng tiền vào phiếu in
+    document.getElementById('printDate').innerText = new Date().toLocaleString('vi-VN');
+
+    const qrContainer = document.getElementById('qrcode');
+    qrContainer.innerHTML = ""; 
+    new QRCode(qrContainer, {
+        text: driveLink,
+        width: 160,  
+        height: 160,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.M
+    });
+
+    document.getElementById('input-form').style.display = 'none';
+    document.getElementById('invoice-zone').style.display = 'block';
+    
+    setTimeout(function() {
+        window.print();
+        resetFormState();
+    }, 500);
+}
+
+function resetFormState() {
+    document.getElementById('btn-submit').disabled = false;
+    document.getElementById('loading-text').style.display = 'none';
+    document.getElementById('input-form').style.display = 'block';
+    document.getElementById('invoice-zone').style.display = 'none';
+}
+</script>
+
+</body>
+</html>
