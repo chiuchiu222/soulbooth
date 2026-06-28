@@ -19,6 +19,12 @@
 
         #invoice-zone { display: none; }
 
+        .frame-lines { margin-top: 4px; }
+        .frame-row { display: flex; align-items: center; font-weight: bold; margin-bottom: 10px; line-height: 1.4; }
+        .frame-row > strong { min-width: 1.4em; flex-shrink: 0; }
+        .frame-slots { flex: 1; display: flex; justify-content: space-between; padding-left: 10px; }
+        .frame-slots span { font-weight: bold; }
+
         /* --- BẢNG LƯU TRỮ KHÁCH HÀNG (CHỈ HIỂN THỊ TRÊN MÀN HÌNH) --- */
         .customer-log-section { margin-top: 20px; max-width: 100%; overflow-x: auto; }
         .customer-log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
@@ -47,6 +53,11 @@
             .qr-container canvas { display: none !important; }
             .invoice-footer { font-size: 9pt; text-align: center; font-style: italic; margin-top: 10px; }
             #input-form, .customer-log-section, #customer-table, #btn-clear-list, .btn-reprint { display: none !important; }
+            #invoice-zone .invoice-title,
+            #invoice-zone .invoice-details,
+            #invoice-zone .invoice-footer { padding-left: 0 !important; padding-right: 0 !important; }
+            #invoice-zone hr { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
+            .frame-slots { padding-left: 14px; padding-right: 0; justify-content: space-between; }
         }
     </style>
 </head>
@@ -127,12 +138,12 @@
         <strong>Tổng tiền:</strong> <span id="printTotal" style="font-weight: bold;"></span><br>
         <strong>Ngày in:</strong> <span id="printDate"></span><br><br>
         <strong>Frame:</strong><br><br>
-        <strong>3 chữ số cuối file ảnh</strong><br><br>
-        <strong>1:      |      |      |</strong><br><br>
-        <strong>2:      |      |      |</strong><br><br>
-        <strong>3:      |      |      |</strong><br><br>
-        <strong>4:      |      |      |</strong><br><br>
-
+        <div class="frame-lines">
+            <div class="frame-row"><strong>1:</strong><span class="frame-slots"><span>|</span><span>|</span><span>|</span></span></div>
+            <div class="frame-row"><strong>2:</strong><span class="frame-slots"><span>|</span><span>|</span><span>|</span></span></div>
+            <div class="frame-row"><strong>3:</strong><span class="frame-slots"><span>|</span><span>|</span><span>|</span></span></div>
+            <div class="frame-row"><strong>4:</strong><span class="frame-slots"><span>|</span><span>|</span><span>|</span></span></div>
+        </div><br>
     </div>
     
     <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
