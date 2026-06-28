@@ -31,6 +31,9 @@
         #customer-table tbody tr:nth-child(even) { background-color: #f8f9fa; }
         #customer-table .drive-link { color: #0275d8; word-break: break-all; font-size: 12px; font-weight: bold; text-decoration: none; }
         #customer-table .empty-row td { text-align: center; color: #6c757d; font-style: italic; }
+        .btn-reprint { width: auto; padding: 5px 10px; font-size: 12px; background-color: #0275d8; white-space: nowrap; }
+        .btn-reprint:hover { background-color: #025aa5; }
+        .btn-reprint:disabled { background-color: #6c757d; cursor: not-allowed; }
 
         /* --- CẤU HÌNH IN ĐẶC THÙ CHO XPRINTER K80 --- */
         @media print {
@@ -43,7 +46,7 @@
             .qr-container img { width: 160px !important; height: 160px !important; display: block !important; margin: 0 auto !important; image-rendering: pixelated; }
             .qr-container canvas { display: none !important; }
             .invoice-footer { font-size: 9pt; text-align: center; font-style: italic; margin-top: 10px; }
-            #input-form, .customer-log-section, #customer-table, #btn-clear-list { display: none !important; }
+            #input-form, .customer-log-section, #customer-table, #btn-clear-list, .btn-reprint { display: none !important; }
         }
     </style>
 </head>
@@ -102,10 +105,11 @@
                 <th>Tổng Tiền</th>
                 <th>Thời gian in</th>
                 <th>Link Drive</th>
+                <th>Thao tác</th>
             </tr>
         </thead>
         <tbody id="customer-table-body">
-            <tr class="empty-row"><td colspan="8">Chưa có khách hàng nào được in hôm nay.</td></tr>
+            <tr class="empty-row"><td colspan="9">Chưa có khách hàng nào được in hôm nay.</td></tr>
         </tbody>
     </table>
 </div>
@@ -124,10 +128,10 @@
         <strong>Ngày in:</strong> <span id="printDate"></span><br><br>
         <strong>Frame:</strong><br><br>
         <strong>3 chữ số cuối file ảnh</strong><br><br>
-        <strong>1:</strong><br><br>
-        <strong>2:</strong><br><br>
-        <strong>3:</strong><br><br>
-        <strong>4:</strong><br><br>
+        <strong>1:      |      |      |</strong><br><br>
+        <strong>2:      |      |      |</strong><br><br>
+        <strong>3:      |      |      |</strong><br><br>
+        <strong>4:      |      |      |</strong><br><br>
 
     </div>
     
@@ -210,14 +214,17 @@ function renderCustomerTable() {
     const entries = loadDailyEntries();
 
     if (entries.length === 0) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Chưa có khách hàng nào được in hôm nay.</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Chưa có khách hàng nào được in hôm nay.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = entries.map(function(entry) {
+    tbody.innerHTML = entries.map(function(entry, index) {
         const driveCell = entry.driveLink
             ? '<a class="drive-link" href="' + escapeHtml(entry.driveLink) + '" target="_blank" rel="noopener">Mở Drive</a>'
             : "--";
+        const reprintBtn = entry.driveLink
+            ? '<button type="button" class="btn-reprint" onclick="reprintBill(' + index + ')">In lại</button>'
+            : '<button type="button" class="btn-reprint" disabled data-no-drive="1">In lại</button>';
         return "<tr>" +
             "<td>" + escapeHtml(entry.stt || "--") + "</td>" +
             "<td>" + escapeHtml(entry.name || "--") + "</td>" +
@@ -227,8 +234,33 @@ function renderCustomerTable() {
             "<td>" + escapeHtml(entry.total || "--") + "</td>" +
             "<td>" + escapeHtml(entry.printedAt || "--") + "</td>" +
             "<td>" + driveCell + "</td>" +
+            "<td>" + reprintBtn + "</td>" +
             "</tr>";
     }).join("");
+}
+
+function reprintBill(index) {
+    const entries = loadDailyEntries();
+    const entry = entries[index];
+    if (!entry) {
+        alert("Không tìm thấy thông tin hóa đơn.");
+        return;
+    }
+    if (!entry.driveLink) {
+        alert("Hóa đơn này không có link Drive để tạo mã QR.");
+        return;
+    }
+    executePrintLayout(
+        entry.stt || "--",
+        entry.name || "--",
+        entry.phone || "--",
+        entry.room || "--",
+        entry.goi || "--",
+        entry.total || "--",
+        entry.driveLink,
+        entry.printedAt,
+        true
+    );
 }
 
 function escapeHtml(str) {
@@ -317,7 +349,7 @@ function processAutoDriveAndPrint() {
     });
 }
 
-function executePrintLayout(stt, name, originalPhone, room, goi, total, driveLink, printedAt) {
+function executePrintLayout(stt, name, originalPhone, room, goi, total, driveLink, printedAt, isReprint) {
     document.getElementById("printSTT").innerText = stt;
     document.getElementById("printName").innerText = name;
     document.getElementById("printPhone").innerText = originalPhone || "--"; // Hiển thị đầy đủ SĐT trên hóa đơn hóa K80
@@ -341,26 +373,36 @@ function executePrintLayout(stt, name, originalPhone, room, goi, total, driveLin
     document.getElementById("customer-table-section").style.display = "none";
     document.getElementById("invoice-zone").style.display = "block";
 
+    if (isReprint) {
+        document.querySelectorAll(".btn-reprint").forEach(function(btn) { btn.disabled = true; });
+    } else {
+        document.getElementById("btn-submit").disabled = true;
+    }
+
     setTimeout(function() {
         window.print();
-        resetFormState();
+        resetFormState(isReprint);
     }, 500);
 }
 
-function resetFormState() {
+function resetFormState(isReprint) {
     document.getElementById("btn-submit").disabled = false;
     document.getElementById("loading-text").style.display = "none";
     document.getElementById("input-form").style.display = "block";
     document.getElementById("customer-table-section").style.display = "block";
     document.getElementById("invoice-zone").style.display = "none";
-    
-    // Làm sạch phom nhập liệu cho ca kế tiếp
-    document.getElementById("customerSTT").value = "";
-    document.getElementById("customerName").value = "";
-    document.getElementById("customerPhone").value = "";
-    document.getElementById("numberRoom").value = "";
-    document.getElementById("serviceGoi").value = "";
-    document.getElementById("totalMoney").value = "";
+    document.querySelectorAll(".btn-reprint").forEach(function(btn) {
+        btn.disabled = btn.hasAttribute("data-no-drive");
+    });
+
+    if (!isReprint) {
+        document.getElementById("customerSTT").value = "";
+        document.getElementById("customerName").value = "";
+        document.getElementById("customerPhone").value = "";
+        document.getElementById("numberRoom").value = "";
+        document.getElementById("serviceGoi").value = "";
+        document.getElementById("totalMoney").value = "";
+    }
 }
 
 document.getElementById("totalMoney").addEventListener("blur", formatTotalMoneyOnBlur);
