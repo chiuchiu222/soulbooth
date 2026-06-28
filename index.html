@@ -12,7 +12,7 @@
         h2 { text-align: center; color: #0275d8; margin-bottom: 20px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="tel"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="text"], input[type="tel"], select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background-color: #fff; }
         button { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #218838; }
         .loading { display: none; text-align: center; font-weight: bold; color: #ffc107; margin-top: 10px; font-size: 14px; }
@@ -61,9 +61,7 @@
             .qr-container canvas { display: none !important; }
             .invoice-footer { font-size: 9pt; text-align: center; font-style: italic; margin-top: 10px; }
             #input-form, .customer-log-section, #customer-table, #btn-clear-list, .btn-reprint { display: none !important; }
-            #invoice-zone .invoice-title,
-            #invoice-zone .invoice-details,
-            #invoice-zone .invoice-footer { padding-left: 0 !important; padding-right: 0 !important; }
+            #invoice-zone .invoice-title, #invoice-zone .invoice-details, #invoice-zone .invoice-footer { padding-left: 0 !important; padding-right: 0 !important; }
             #invoice-zone hr { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
             .frame-track { padding-left: 14px; padding-right: 0; }
             .frame-vline-wrap { left: calc(1.4em + 14px) !important; }
@@ -93,7 +91,10 @@
 
     <div class="form-group">
         <label for="numberRoom">Room (Phòng):</label>
-        <input type="text" id="numberRoom" placeholder="Ví dụ: 102">
+        <select id="numberRoom">
+            <option value="1">Room 1</option>
+            <option value="2">Room 2</option>
+        </select>
     </div>
 
     <div class="form-group">
@@ -165,7 +166,7 @@
     </div>
     
     <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
-    <div style="text-align: center; font-size: 9pt; font-weight: bold; margin-top: 5px;">MÃ QR TRUY CẬP THƯ MỤC</div>
+    <div style="text-align: center; font-size: 9pt; font-weight: bold; margin-top: 5px;">MÃ QR TRUY CẬP ẢNH</div>
     
     <div class="qr-container" id="qrcode"></div>
     
@@ -304,7 +305,7 @@ function processAutoDriveAndPrint() {
     const stt = document.getElementById("customerSTT").value || "--";
     const name = document.getElementById("customerName").value;
     const phoneRaw = document.getElementById("customerPhone").value || "";
-    const room = document.getElementById("numberRoom").value || "--";
+    const room = document.getElementById("numberRoom").value; // Lấy giá trị từ select (1 hoặc 2)
     const goi = document.getElementById("serviceGoi").value || "--";
     const totalRaw = document.getElementById("totalMoney").value || "--";
     const totalFormatted = formatMoneyDisplay(totalRaw) || totalRaw;
@@ -314,7 +315,6 @@ function processAutoDriveAndPrint() {
         return;
     }
 
-    // SỬA LỖI ĐỒNG BỘ 4 SỐ CUỐI: Cắt chuỗi sạch đưa vào mã hóa
     const cleanPhone = cleanPhoneNumber(phoneRaw);
     const lastFourDigits = getLastFourDigits(cleanPhone);
 
@@ -341,18 +341,17 @@ function processAutoDriveAndPrint() {
         if (result.status === "success" && result.url) {
             const printedAt = new Date().toLocaleString("vi-VN");
             
-            // Đồng bộ ghi nhận số điện thoại nguyên bản hiển thị đầy đủ ở bảng lưu trữ cục bộ
             saveDailyEntry({
                 stt: stt,
                 name: name,
                 phone: phoneRaw, 
-                room: room,
+                room: "Room " + room, // Đồng bộ hiển thị chữ "Room 1/2" ở bảng log
                 goi: goi,
                 total: totalFormatted,
                 printedAt: printedAt,
                 driveLink: result.url
             });
-            executePrintLayout(stt, name, phoneRaw, room, goi, totalFormatted, result.url, printedAt);
+            executePrintLayout(stt, name, phoneRaw, "Room " + room, goi, totalFormatted, result.url, printedAt);
         } else {
             alert("Lỗi tạo folder từ Google: " + (result.message || "Không nhận được link Drive."));
             resetFormState();
@@ -368,21 +367,21 @@ function processAutoDriveAndPrint() {
             stt: stt,
             name: name,
             phone: phoneRaw,
-            room: room,
+            room: "Room " + room,
             goi: goi,
             total: totalFormatted,
             printedAt: printedAt,
             driveLink: fallbackSearchLink
         });
-        executePrintLayout(stt, name, phoneRaw, room, goi, totalFormatted, fallbackSearchLink, printedAt);
+        executePrintLayout(stt, name, phoneRaw, "Room " + room, goi, totalFormatted, fallbackSearchLink, printedAt);
     });
 }
 
 function executePrintLayout(stt, name, originalPhone, room, goi, total, driveLink, printedAt, isReprint) {
     document.getElementById("printSTT").innerText = stt;
     document.getElementById("printName").innerText = name;
-    document.getElementById("printPhone").innerText = originalPhone || "--"; // Hiển thị đầy đủ SĐT trên hóa đơn hóa K80
-    document.getElementById("printRoom").innerText = room;
+    document.getElementById("printPhone").innerText = originalPhone || "--"; 
+    document.getElementById("printRoom").innerText = room; // In ra chữ "Room 1" hoặc "Room 2"
     document.getElementById("printGoi").innerText = goi;
     document.getElementById("printTotal").innerText = total;
     document.getElementById("printDate").innerText = printedAt || new Date().toLocaleString("vi-VN");
@@ -428,7 +427,7 @@ function resetFormState(isReprint) {
         document.getElementById("customerSTT").value = "";
         document.getElementById("customerName").value = "";
         document.getElementById("customerPhone").value = "";
-        document.getElementById("numberRoom").value = "";
+        document.getElementById("numberRoom").value = "1"; // Đưa select về mặc định Room 1
         document.getElementById("serviceGoi").value = "";
         document.getElementById("totalMoney").value = "";
     }
