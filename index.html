@@ -109,7 +109,7 @@
     </div>
     
     <button id="btn-submit" onclick="processAutoDriveAndPrint()">LƯU THÔNG TIN & IN HÓA ĐƠN</button>
-    <div id="loading-text" class="loading">Đang chờ Google Apps Script cấp phát mã hóa đơn bảo mật... Vui lòng đợi...</div>
+    <div id="loading-text" class="loading">Đang kết nối hệ thống Drive và ghi chép Google Sheets... Vui lòng đợi...</div>
 </div>
 
 <div class="container customer-log-section" id="customer-table-section">
@@ -143,7 +143,7 @@
     <hr style="border-top: 1px dashed #000; margin: 5px 0; border-bottom: none; border-left: none; border-right: none;">
     
     <div class="invoice-details">
-        <strong>STT:</strong> <span id="printSTT"></span><br>
+        <strong>Mã hóa đơn:</strong> <span id="printBillCode" style="font-weight: bold;"></span><br>
         <strong>Khách hàng:</strong> <span id="printName"></span><br>
         <strong>Điện thoại:</strong> <span id="printPhone"></span><br>
         <strong>Room:</strong> <span id="printRoom"></span><br>
@@ -272,7 +272,7 @@ function reprintBill(index) {
     const entries = loadDailyEntries();
     const entry = entries[index];
     if (!entry) return;
-    executePrintLayout(entry.stt, entry.name, entry.phone, entry.room, entry.goi, entry.total, entry.driveLink, entry.printedAt, true);
+    executePrintLayout(entry.billCode, entry.name, entry.phone, entry.room, entry.goi, entry.total, entry.driveLink, entry.printedAt, true);
 }
 
 function escapeHtml(str) {
@@ -299,7 +299,6 @@ function processAutoDriveAndPrint() {
     document.getElementById("btn-submit").disabled = true;
     document.getElementById("loading-text").style.display = "block";
 
-    // CẢI TIẾN: Không tự sinh mã hóa đơn cục bộ nữa, đẩy tải lên cho Apps Script
     const payload = {
         stt: stt,
         name: name,
@@ -320,7 +319,6 @@ function processAutoDriveAndPrint() {
         if (result.status === "success" && result.url && result.billCode) {
             const printedAt = new Date().toLocaleString("vi-VN");
             
-            // Nhận kết quả billCode chính thống từ server trả về để lưu trữ và hiển thị
             saveDailyEntry({
                 billCode: result.billCode,
                 stt: stt,
@@ -333,16 +331,15 @@ function processAutoDriveAndPrint() {
                 printedAt: printedAt,
                 driveLink: result.url
             });
-            executePrintLayout(stt, name, phoneRaw, "Room " + room, goi, totalFormatted, result.url, printedAt, false);
+            executePrintLayout(result.billCode, name, phoneRaw, "Room " + room, goi, totalFormatted, result.url, printedAt, false);
         } else {
             alert("Lỗi từ Google: " + result.message);
             resetFormState();
         }
     })
     .catch(error => {
-        // Dự phòng lỗi CORS nghiêm ngặt hoặc rớt mạng cục bộ tại quầy
-        alert("Lỗi đồng bộ Server. Chuyển sang luồng in mã QR cục bộ.");
-        const timestampCode = String(Date.now()).slice(-4); // Lấy tạm 4 số cuối của mốc thời gian làm mã dự phòng
+        alert("Lỗi mạng/CORS. Hệ thống chuyển sang tạo QR dự phòng.");
+        const timestampCode = String(Date.now()).slice(-4);
         const fallbackSearchLink = "https://drive.google.com/drive/search?q=" + encodeURIComponent(duration + " - " + name + " - " + timestampCode);
         const printedAt = new Date().toLocaleString("vi-VN");
         
@@ -358,12 +355,13 @@ function processAutoDriveAndPrint() {
             printedAt: printedAt,
             driveLink: fallbackSearchLink
         });
-        executePrintLayout(stt, name, phoneRaw, "Room " + room, goi, totalFormatted, fallbackSearchLink, printedAt, false);
+        executePrintLayout("ERR-" + timestampCode, name, phoneRaw, "Room " + room, goi, totalFormatted, fallbackSearchLink, printedAt, false);
     });
 }
 
-function executePrintLayout(stt, name, originalPhone, room, goi, total, driveLink, printedAt, isReprint) {
-    document.getElementById("printSTT").innerText = stt;
+function executePrintLayout(billCode, name, originalPhone, room, goi, total, driveLink, printedAt, isReprint) {
+    // Gán trực tiếp Mã hóa đơn nhận về từ server vào phôi hóa đơn K80
+    document.getElementById("printBillCode").innerText = billCode;
     document.getElementById("printName").innerText = name;
     document.getElementById("printPhone").innerText = originalPhone || "--"; 
     document.getElementById("printRoom").innerText = room; 
